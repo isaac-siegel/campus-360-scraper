@@ -1,13 +1,15 @@
 from bs4 import BeautifulSoup
 from selenium import webdriver
 import re
+import sys
+
 
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
-
 
 
 def extract_lat_lng(str):
@@ -25,62 +27,100 @@ def is_pano(page_html):
 
     return len(pano_icon) != 0
 
-driver = webdriver.Firefox()
-driver.get('https://www.google.com/maps/place/ucla')
+def get_thumbnail_url(page_html):
+    soup = BeautifulSoup(page_html, "html.parser")
+    active_card = soup.select(".widget-runway-card-active")
+    if len(active_card) == 0:
+        print("Can't find active card")
 
-# html = driver.page_source
-# html = driver.find_element_by_class_name("section-image-pack-item-1").get_attribute('innerHTML')
-# html = driver.__getattribute__(".section-image-pack-item-1")
+    img = active_card[0].select(".widget-runway-card-background-flicker-hack")
+    thumbnail_url = img[0]['src'][2:]
 
-
-driver.implicitly_wait(20)
-
-clicked = driver.find_element_by_tag_name("body").find_element_by_class_name("section-image-pack-item-1").click()
-
+    return "http://" + thumbnail_url
 
 
-try:
+def extract_photo_spheres(school, driver):
+
+
+    spheres = []
+    time.sleep(3)
+
     element = WebDriverWait(driver, 10).until(
-        EC.presence_of_all_elements_located((By.CLASS_NAME, "widget-runway-card-button"))
+        EC.presence_of_all_elements_located((By.CLASS_NAME, "section-image-pack-item-1"))
     )
 
-    # widget-runway-tray-wrapper
-    like = driver.find_elements_by_class_name("widget-runway-subview-card-view-container")
-    left = driver.find_element_by_class_name("widget-play-left")
-    right = driver.find_element_by_class_name("widget-play-right")
-    print(len(like))
+    clicked = driver.find_element_by_tag_name("body").find_element_by_class_name("section-image-pack-item-1").click()
 
-    like[len(like)-1].click()
-    # for x in range(1, len(like)-1):
-    #     print(str(x) + " " + str(len(like)))
-    #     right.click()
-    #     time.sleep(.5)
+    try:
+        element = WebDriverWait(driver, 10).until(
+            EC.presence_of_all_elements_located((By.CLASS_NAME, "widget-runway-card-button"))
+        )
 
-    time.sleep(5)
+        # widget-runway-tray-wrapper
+        like = driver.find_elements_by_class_name("widget-runway-subview-card-view-container")
+        left = driver.find_element_by_class_name("widget-play-left")
+        right = driver.find_element_by_class_name("widget-play-right")
+        print(len(like))
 
-    for x in range(0, len(like)):
+        like[len(like) - 1].click()
+        # for x in range(1, len(like)-1):
+        #     print(str(x) + " " + str(len(like)))
+        #     right.click()
+        #     time.sleep(.5)
 
-        active = driver.find_element_by_class_name("widget-runway-card-active")
+        time.sleep(5)
 
-        curr_is_pano = is_pano(driver.page_source)
-        if curr_is_pano:
-            coors = extract_lat_lng(driver.current_url)
-            print(coors)
+        # click the 3rd one to start with, first two are just normal images
+        like[2].click()
+
+        for x in range(0, 5):
+        # for x in range(0, len(like)):
+
+            active = driver.find_element_by_class_name("widget-runway-card-active")
+
+            curr_is_pano = is_pano(driver.page_source)
+            if curr_is_pano:
+                sphere = dict()
+                coors = extract_lat_lng(driver.current_url)
+                thumbnail_url = get_thumbnail_url(driver.page_source)
+
+                sphere['school_name'] = school
+                sphere['lat'] = coors[0]
+                sphere['lng'] = coors[1]
+                sphere['thumbnail_url'] = thumbnail_url
+
+                spheres.append(sphere)
+                print(thumbnail_url)
+                print(coors)
+
+            # try:
+            #     panos = active.find_element_by_class_name("maps-sprite-photos-pano")
+            #     # print("Photo Sphere")
+            #     coors = extract_lat_lng(driver.current_url)
+            #     print(coors)
+            # except:
+            #     pass
+            #     # print("Not Photo Sphere")
+
+            right.click()
+            time.sleep(1)
+    except:
+        print("Unexpected error:", sys.exc_info()[0])
+
+    finally:
+        print("Outer Finally: "+ school)
+        driver.quit()
+        return spheres
 
 
-        # try:
-        #     panos = active.find_element_by_class_name("maps-sprite-photos-pano")
-        #     # print("Photo Sphere")
-        #     coors = extract_lat_lng(driver.current_url)
-        #     print(coors)
-        # except:
-        #     pass
-        #     # print("Not Photo Sphere")
+def scrape(school):
+    driver = webdriver.Firefox()
+    driver.get('https://www.google.com/maps')
 
-        right.click()
-        time.sleep(1)
+    search_box = driver.find_element_by_id("searchboxinput")
+    search_box.send_keys(school)
+    search_box.send_keys(Keys.ENTER)
 
-finally:
-    print("Outer Finally")
-    exit()
-    driver.quit()
+    schools_photo_spheres = extract_photo_spheres(school, driver)
+    return schools_photo_spheres
+
