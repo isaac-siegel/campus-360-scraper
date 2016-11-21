@@ -11,15 +11,15 @@ pp = pprint.PrettyPrinter(indent=4)
 
 
 def go():
-    schools = ["el camino college", "cal poly pomona"]
+    schools = ["cal poly pomona", "el camino college"  ]
 
     for school_name in schools:
         store_in_mongo(school_name)
 
 
 def store_in_mongo(school_name):
-    school_id = store_school_in_mongo(school_name)
     schools_photo_spheres = sphere_coord_scraper.scrape(school_name)
+    school_id = store_school_in_mongo(school_name)
     store_spheres_in_mongo(school_name, school_id, schools_photo_spheres)
 
 
